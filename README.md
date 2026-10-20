@@ -8,6 +8,20 @@ repo นี้มีแค่เครื่องมือ, คำแปลท�
 
 > ต้องใช้ไคลเอนต์ที่มีภาษาไทยในตัว (มีไฟล์ `ro3_Data\StreamingAssets\Recovery\LuaPayload\Localization_th.lua.bytes`)
 
+## ตัวอย่าง
+
+**ชื่อและป้ายใต้ชื่อ NPC** — ป้ายเหลืองอย่าง `ผู้ฝึกสอนอาชีพสูงสุด`, `เทเลพอร์ต Kafra` เดิมเป็นจีนเสมอ (`卡普拉传送`)
+
+![ชื่อและป้าย NPC ในเมือง](docs/images/npc-names.webp)
+
+**บทพูด NPC และตัวเลือก**
+
+![บทพูด Kafra](docs/images/npc-dialog.webp)
+
+**กล่องเควส** — `[เนื้อเรื่องหลัก]`, `[กิจกรรม]` และเป้าหมายเควส
+
+<img src="docs/images/quest.webp" alt="กล่องเควส" width="390">
+
 ---
 
 ## ใช้งานเร็ว
