@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Builds the Thai text map from the player's own client. Needs an ro3emu-server checkout for Ro3Emu.DataExport:
+       set Ro3EmuSrc to that folder (see README). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Ro3EmuSrc Condition="'$(Ro3EmuSrc)' == ''">..\..\..\ro3emu-server</Ro3EmuSrc>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(Ro3EmuSrc)\src\Ro3Emu.DataExport\Ro3Emu.DataExport.csproj" />
+  </ItemGroup>
+</Project>

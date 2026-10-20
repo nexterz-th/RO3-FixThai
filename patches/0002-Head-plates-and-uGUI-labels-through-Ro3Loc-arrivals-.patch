@@ -1,0 +1,163 @@
+From 5e6eb3e6c6db3784cfbd85bc8dbb40777b7d9747 Mon Sep 17 00:00:00 2001
+From: NEXTERZ <195136047+nexterz-th@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 13:31:48 +0700
+Subject: [PATCH 2/2] Head plates and uGUI labels through Ro3Loc; arrivals off
+ the nav grid moved to the nearest walkable cell
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- TextSink.PatchMeshUi: HUDUber.Text/Graphic.SetText. The Lua HUD elements (LC_HudElement_NameTitle, _OnePiece)
+  draw NPC titles and Rift Stone plates through MeshUI, which none of TMP, HUD.dll or uGUI sees: 卡普拉传送 stayed Chinese.
+- TextSink.PatchHud: MTextData.Context as well as SetWordCell; PatchUiText: UnityEngine.UI.Text.text.
+- WorldMap.Standable: a Kafra arrival on an unwalkable cell (Southern Payon 187.4,260) froze the player, the client
+  asking for a correction that never came. Arrivals, same-map teleports and login points snap to the nearest
+  walkable cell within 12 m.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+---
+ src/Ro3Emu.ClientTools/ClientPatcher.cs |  4 +--
+ src/Ro3Emu.ClientTools/TextSink.cs      | 41 ++++++++++++++++++++++++-
+ src/Ro3Emu.Server/Game/SceneService.cs  |  6 ++--
+ src/Ro3Emu.Server/Maps/WorldData.cs     | 23 ++++++++++++++
+ 4 files changed, 68 insertions(+), 6 deletions(-)
+
+diff --git a/src/Ro3Emu.ClientTools/ClientPatcher.cs b/src/Ro3Emu.ClientTools/ClientPatcher.cs
+index 6822142..8806a2c 100644
+--- a/src/Ro3Emu.ClientTools/ClientPatcher.cs
++++ b/src/Ro3Emu.ClientTools/ClientPatcher.cs
+@@ -81,12 +81,12 @@ public static class ClientPatcher
+             {
+                 "Happyengine.Network.dll" => OpenPrivateAccess,
+                 "Assembly-CSharp.dll" => m => RedirectChat(m, hooksDll) + "; " + VoiceStubPatch.Patch(m, hooksDll) + "; " + VoiceEnablePatch.Patch(m)
+-                    + "; " + TextSink.PatchLanguageGet(m, locDll),
++                    + "; " + TextSink.PatchLanguageGet(m, locDll) + "; " + TextSink.PatchMeshUi(m, locDll),
+                 "Happyengine.Base.Runtime.dll" when VerboseLogs => ForceShowLog,
+                 "Unity.TextMeshPro.dll" => m => TextSink.PatchTmp(m, locDll, hooksDll),
+                 "HUD.dll" => m => TextSink.PatchHud(m, locDll),
+                 "HappyEngine.Resource.dll" => m => TextSink.PatchLauncher(m, locDll),
+-                "UnityEngine.UI.dll" => m => ImageSwapPatch.Patch(m, hooksDll),
++                "UnityEngine.UI.dll" => m => ImageSwapPatch.Patch(m, hooksDll) + "; " + TextSink.PatchUiText(m, locDll),
+                 _ => null,
+             };
+             RewriteStrings(clientDir, file, source, destination, rules, extra);
+diff --git a/src/Ro3Emu.ClientTools/TextSink.cs b/src/Ro3Emu.ClientTools/TextSink.cs
+index 8826a30..cceb5fc 100644
+--- a/src/Ro3Emu.ClientTools/TextSink.cs
++++ b/src/Ro3Emu.ClientTools/TextSink.cs
+@@ -68,7 +68,46 @@ internal static class TextSink
+             patched++;
+         }
+         if (patched == 0) throw new InvalidOperationException("HUDTextHelper.SetWordCell(kName) not found");
+-        return $"text sink: HUDTextHelper.SetWordCell x{patched} -> Ro3Loc";
++        // Head labels the client reads from its config tables in Chinese (NPC titles such as 卡普拉传送, Rift Stone names
++        // and buffs) reach the mesh through RoleHUDComponent, not SetWordCell; every HUD mesh text ends in MTextData.Context.
++        var context = module.GetType("MTextData")?.Methods.SingleOrDefault(m => m.Name == "set_Context" && m.HasBody)
++            ?? throw new InvalidOperationException("MTextData.set_Context not found");
++        MapArgument(context, context.Parameters[0], map);
++        return $"text sink: HUDTextHelper.SetWordCell x{patched}, MTextData.Context -> Ro3Loc";
++    }
++
++    /// <summary>
++    /// Head plates drawn by the Lua HUD elements through MeshUI (LC_HudElement_NameTitle, _OnePiece: NPC titles such as
++    /// 卡普拉传送, Rift Stone buffs): MeshUIUtils.SetText -> HUDUber.Text.SetText, none of TMP, HUD.dll or uGUI.
++    /// </summary>
++    public static string PatchMeshUi(ModuleDefinition module, string locDll)
++    {
++        using var loc = AssemblyDefinition.ReadAssembly(locDll, new ReaderParameters { InMemory = true });
++        var map = module.ImportReference(Method(loc, "Map"));
++        int patched = 0;
++        foreach (var type in new[] { "HUDUber.Text", "HUDUber.Graphic" })
++        foreach (var method in module.GetType(type)?.Methods.Where(m => m.Name == "SetText" && m.HasBody && m.Parameters.Count == 1
++                     && m.Parameters[0].ParameterType.FullName == "System.String") ?? [])
++        {
++            MapArgument(method, method.Parameters[0], map);
++            patched++;
++        }
++        if (patched == 0) throw new InvalidOperationException("HUDUber.Text.SetText not found");
++        return $"text sink: HUDUber SetText x{patched} -> Ro3Loc";
++    }
++
++    /// <summary>
++    /// Legacy uGUI labels (UnityEngine.UI.Text), e.g. the Rift Stone head plate (裂隙之石 / 攻击强化): no TMP and no HUD
++    /// mesh, so neither sink above sees them.
++    /// </summary>
++    public static string PatchUiText(ModuleDefinition module, string locDll)
++    {
++        using var loc = AssemblyDefinition.ReadAssembly(locDll, new ReaderParameters { InMemory = true });
++        var map = module.ImportReference(Method(loc, "Map"));
++        var setter = module.GetType("UnityEngine.UI.Text")?.Methods.SingleOrDefault(m => m.Name == "set_text" && m.HasBody)
++            ?? throw new InvalidOperationException("UnityEngine.UI.Text.set_text not found");
++        MapArgument(setter, setter.Parameters[0], map);
++        return "text sink: UI.Text.text -> Ro3Loc";
+     }
+ 
+     /// <summary>
+diff --git a/src/Ro3Emu.Server/Game/SceneService.cs b/src/Ro3Emu.Server/Game/SceneService.cs
+index 7ac1649..56fde93 100644
+--- a/src/Ro3Emu.Server/Game/SceneService.cs
++++ b/src/Ro3Emu.Server/Game/SceneService.cs
+@@ -119,7 +119,7 @@ public sealed partial class SceneService(IOptions<ServerOptions> options, World
+                     && await QueuePublicAdmission(s, scene, at, reason, transfer);
+         }
+         var arrival = at ?? map?.Born ?? new MapPoint(s.Position.X, s.Position.Y, s.Position.Z, s.Face);
+-        if (map != null) arrival = map.Grounded(arrival);
++        if (map != null) arrival = map.Standable(arrival);
+         try
+         {
+             if (transfer != null && !transfer.Begin(s))
+@@ -206,7 +206,7 @@ public sealed partial class SceneService(IOptions<ServerOptions> options, World
+         var map = worldData.Map(scene);
+         var point = new MapPoint(saved.X, saved.Y, saved.Z, face);
+         if (map == null) return point;
+-        var grounded = map.Grounded(point);
++        var grounded = map.Standable(point);
+         return map.IsWalkable(grounded.X, grounded.Y, grounded.Z) ? grounded : map.Born is { } born ? map.Grounded(born) : grounded;
+     }
+ 
+@@ -455,7 +455,7 @@ public sealed partial class SceneService(IOptions<ServerOptions> options, World
+     /// </summary>
+     public async Task TeleportInMapAsync(GameSession s, MapPoint at)
+     {
+-        if (worldData.Map(s.SceneEntry) is { } map) at = map.Grounded(at);
++        if (worldData.Map(s.SceneEntry) is { } map) at = map.Standable(at);
+         var pos = new Vec3 { X = at.X, Y = at.Y, Z = at.Z };
+         await s.SendGameAsync(GameAoiSink.MovementChange, new MovementChangeNtf
+         {
+diff --git a/src/Ro3Emu.Server/Maps/WorldData.cs b/src/Ro3Emu.Server/Maps/WorldData.cs
+index d3f5db5..d8a685c 100644
+--- a/src/Ro3Emu.Server/Maps/WorldData.cs
++++ b/src/Ro3Emu.Server/Maps/WorldData.cs
+@@ -94,6 +94,29 @@ public sealed class MapWorld
+         Nav?.WalkHeight(p.X, p.Z, p.Y) is { } h ? p with { Y = h } : p;
+ 
+     public bool IsWalkable(float x, float y, float z) => Nav?.IsWalkable(x, y, z) ?? true;
++
++    /// <summary>
++    /// <see cref="Grounded"/>, then, when that cell cannot be walked (Southern Payon's Kafra arrival 187.4,260 sits on
++    /// one), the nearest walkable cell within <paramref name="radius"/> metres. A player set down off the grid is frozen:
++    /// the client keeps asking for a correction and refuses to move.
++    /// </summary>
++    public MapPoint Standable(MapPoint p, float radius = 12f)
++    {
++        var grounded = Grounded(p);
++        if (Nav is not { } nav || nav.IsWalkable(grounded.X, grounded.Y, grounded.Z)) return grounded;
++        for (float r = 0.5f; r <= radius; r += 0.5f)
++        {
++            int samples = Math.Max(8, (int)(r * 8));
++            for (int i = 0; i < samples; i++)
++            {
++                double angle = 2 * Math.PI * i / samples;
++                float x = p.X + r * (float)Math.Cos(angle), z = p.Z + r * (float)Math.Sin(angle);
++                if (nav.WalkHeight(x, z, p.Y) is { } h && MathF.Abs(h - p.Y) <= 6f && nav.IsWalkable(x, h, z))
++                    return p with { X = x, Y = h, Z = z };
++            }
++        }
++        return grounded;
++    }
+ }
+ 
+ /// <summary>
+-- 
+2.54.0.windows.1
+

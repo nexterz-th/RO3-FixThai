@@ -1,0 +1,139 @@
+From da54fa301b559dbb7159a69a4fdd0215b4be30e8 Mon Sep 17 00:00:00 2001
+From: NEXTERZ <195136047+nexterz-th@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 12:30:47 +0700
+Subject: [PATCH 1/2] Thai server text and the recovery-client login fix
+
+- ClientPatcher: Happyengine.Network.dll gets its private members that other types call opened to internal.
+  Recovery builds call <RequestRecoveryOfficialSdkTicketCoroutine>d__31.SealedFallback_SelectionFailed from
+  HttpNetworkManager.RecoveryOfficialSdkLoginStart; Mono threw MethodAccessException and login never started.
+- ServerOptions.TextLanguage + GameData.Text: config/Localization_{lang}.json over Localization_en, so NPC and
+  item names the server sends follow the server's language; ids the table lacks stay English. Default "en".
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+---
+ src/Ro3Emu.ClientTools/ClientPatcher.cs | 37 +++++++++++++++++++++++++
+ src/Ro3Emu.Server/Data/GameData.cs      | 24 ++++++++++++----
+ src/Ro3Emu.Server/ServerOptions.cs      |  4 +++
+ 3 files changed, 59 insertions(+), 6 deletions(-)
+
+diff --git a/src/Ro3Emu.ClientTools/ClientPatcher.cs b/src/Ro3Emu.ClientTools/ClientPatcher.cs
+index 70e0309..6822142 100644
+--- a/src/Ro3Emu.ClientTools/ClientPatcher.cs
++++ b/src/Ro3Emu.ClientTools/ClientPatcher.cs
+@@ -79,6 +79,7 @@ public static class ClientPatcher
+         {
+             Func<ModuleDefinition, string>? extra = file switch
+             {
++                "Happyengine.Network.dll" => OpenPrivateAccess,
+                 "Assembly-CSharp.dll" => m => RedirectChat(m, hooksDll) + "; " + VoiceStubPatch.Patch(m, hooksDll) + "; " + VoiceEnablePatch.Patch(m)
+                     + "; " + TextSink.PatchLanguageGet(m, locDll),
+                 "Happyengine.Base.Runtime.dll" when VerboseLogs => ForceShowLog,
+@@ -558,6 +559,42 @@ public static class ClientPatcher
+         foreach (var where in changed) Console.WriteLine($"    {Shorten(where, 150)}");
+     }
+ 
++    /// <summary>
++    /// Recovery builds call private members of a nested type from its outer type (HttpNetworkManager.RecoveryOfficialSdkLoginStart
++    /// -> &lt;RequestRecoveryOfficialSdkTicketCoroutine&gt;d__31.SealedFallback_SelectionFailed): Mono throws MethodAccessException
++    /// and login never starts. Every private method or field reached from outside its declaring type becomes internal.
++    /// </summary>
++    private static string OpenPrivateAccess(ModuleDefinition module)
++    {
++        static bool Inside(TypeDefinition? caller, TypeDefinition owner)
++        {
++            for (; caller != null; caller = caller.DeclaringType)
++                if (caller == owner) return true;
++            return false;
++        }
++
++        int opened = 0;
++        foreach (var type in module.GetTypes())
++        foreach (var method in type.Methods.Where(m => m.HasBody))
++        foreach (var instruction in method.Body.Instructions)
++        {
++            switch (instruction.Operand)
++            {
++                case MethodReference r when r.Module == module && r.Resolve() is { IsPrivate: true } target && !Inside(type, target.DeclaringType):
++                    target.IsPrivate = false;
++                    target.IsAssembly = true;
++                    opened++;
++                    break;
++                case FieldReference r when r.Module == module && r.Resolve() is { IsPrivate: true } target && !Inside(type, target.DeclaringType):
++                    target.IsPrivate = false;
++                    target.IsAssembly = true;
++                    opened++;
++                    break;
++            }
++        }
++        return $"private access opened: {opened} member(s)";
++    }
++
+     private static IEnumerable<(string Where, string Value)> Literals(AssemblyDefinition assembly)
+     {
+         foreach (var type in assembly.MainModule.GetTypes())
+diff --git a/src/Ro3Emu.Server/Data/GameData.cs b/src/Ro3Emu.Server/Data/GameData.cs
+index c177d7f..1558870 100644
+--- a/src/Ro3Emu.Server/Data/GameData.cs
++++ b/src/Ro3Emu.Server/Data/GameData.cs
+@@ -88,7 +88,10 @@ public sealed class GameData(IOptions<ServerOptions> options, ILogger<GameData>
+ 
+     public JsonElement? Row(string table, long id) => Table(table).TryGetValue(id.ToString(), out var row) ? row : null;
+ 
+-    /// <summary>Localized text (Localization_en: id -> {_kDes}); config "names" are arrays of text ids.</summary>
++    /// <summary>
++    /// Localized text (Localization_en: id -> {_kDes}, with Localization_{TextLanguage} over it); config "names" are
++    /// arrays of text ids.
++    /// </summary>
+     public string Text(long id)
+     {
+         var texts = _texts;
+@@ -99,17 +102,26 @@ public sealed class GameData(IOptions<ServerOptions> options, ILogger<GameData>
+                 if (texts == null)
+                 {
+                     texts = new();
+-                    foreach (var (_, row) in Table("Localization_en"))
+-                    {
+-                        if (row.TryGetProperty("_iID", out var tid) && row.TryGetProperty("_kDes", out var des) && des.ValueKind == JsonValueKind.String)
+-                            texts[tid.GetInt64()] = des.GetString()!;
+-                    }
++                    AddTexts(texts, "Localization_en", overlay: false);
++                    var language = options.Value.TextLanguage;
++                    if (!string.IsNullOrWhiteSpace(language) && !language.Equals("en", StringComparison.OrdinalIgnoreCase))
++                        AddTexts(texts, "Localization_" + language, overlay: true);
+                     _texts = texts; // published only when complete; readers never see a half-built index
+                 }
+             }
+         return texts.TryGetValue(id, out var text) ? text : "";
+     }
+ 
++    private void AddTexts(Dictionary<long, string> texts, string table, bool overlay)
++    {
++        foreach (var (_, row) in Table(table))
++        {
++            if (row.TryGetProperty("_iID", out var tid) && row.TryGetProperty("_kDes", out var des) && des.ValueKind == JsonValueKind.String
++                && des.GetString()! is var s && (!overlay || s.Length > 0 && s != "None"))
++                texts[tid.GetInt64()] = s;
++        }
++    }
++
+     /// <summary>Text of a field holding [textId, ...].</summary>
+     /// <summary>
+     /// A localized text field [textId, param1, param2, ...]: the text with @{n} replaced by the n-th parameter, as the
+diff --git a/src/Ro3Emu.Server/ServerOptions.cs b/src/Ro3Emu.Server/ServerOptions.cs
+index 2a9e62c..e20652f 100644
+--- a/src/Ro3Emu.Server/ServerOptions.cs
++++ b/src/Ro3Emu.Server/ServerOptions.cs
+@@ -40,6 +40,10 @@ public sealed class ServerOptions
+     /// default so the hundreds of short-lived test hosts load only the tables they touch.</summary>
+     public bool PreloadGameData { get; set; }
+ 
++    /// <summary>Language of the text the server sends (NPC names, item names, messages): config/Localization_{TextLanguage}.json
++    /// over Localization_en, so an id it lacks stays English. "en" (default) or e.g. "th".</summary>
++    public string TextLanguage { get; set; } = "en";
++
+     /// <summary>
+     /// Folder with the data exported from the client: config/ (tools/ConfigExport), sceneeditor/ and nav/
+     /// (tools/WorldData); default DataDir.
+-- 
+2.54.0.windows.1
+
