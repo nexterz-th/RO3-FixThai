@@ -24,7 +24,24 @@ repo นี้มีแค่เครื่องมือ, คำแปลท�
 
 ---
 
-## ใช้งานเร็ว
+## ใช้งาน (มี RO3Emu อยู่แล้ว)
+
+ไม่ต้องติดตั้งอะไรเพิ่ม
+
+1. ดาวน์โหลด **`RO3-FixThai-win-x64.zip`** จาก [Releases](https://github.com/nexterz-th/RO3-FixThai/releases/latest)
+2. ปิดเกม แล้วแตกไฟล์ทั้งหมดไปวางในโฟลเดอร์ที่มี `RO3Emu.exe` (`RO3Emu.exe` จะถูกทับ แนะนำให้สำรองตัวเดิมไว้ก่อน)
+3. ดับเบิลคลิก **`RO3-FixThai.exe`** โปรแกรมจะหาเกมเอง แล้วสร้างภาษาไทยจากไฟล์เกมในเครื่องคุณ
+4. เข้าเกมด้วย `RO3Emu.exe join <server>` ตามปกติ แล้วในเกมเลือกภาษาไทย
+
+| ใน zip | ทำอะไร |
+|---|---|
+| `RO3-FixThai.exe` | สร้างไฟล์ภาษาไทยแล้ววางให้ครบ (`RO3-FixThai.exe restore` = กลับเป็นอังกฤษ) |
+| `RO3Emu.exe` | RO3Emu 1.0.4 + patch ในโฟลเดอร์ `patches/` แก้ป้ายใต้ชื่อ NPC และ login ไคลเอนต์ Recovery |
+
+ใช้แค่ `RO3-FixThai.exe` อย่างเดียวก็ได้ (UI, เควส, บทพูดเป็นไทย) แต่ป้ายใต้ชื่อ NPC จะยังเป็นจีน
+ถ้าเกมอัปเดตแล้วกลับเป็นอังกฤษ ดับเบิลคลิก `RO3-FixThai.exe` อีกรอบ
+
+## build เอง (นักพัฒนา)
 
 1. ติดตั้ง [.NET 10 SDK](https://dotnet.microsoft.com/download)
 2. clone RO3Emu และ repo นี้
@@ -116,3 +133,9 @@ pwsh tools/release/pack.ps1
 
 GPL-3.0 เหมือน RO3Emu (patch เป็นงานต่อยอดจาก ro3emu-server) ไม่มีส่วนเกี่ยวข้องกับ Gravity
 ไม่มีไฟล์ข้อมูลหรือคำแปลของเกมอยู่ใน repo นี้
+
+## build `RO3-FixThai.exe`
+
+```
+dotnet publish tools/FixThai -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Ro3EmuSrc=<ro3emu-server>
+```

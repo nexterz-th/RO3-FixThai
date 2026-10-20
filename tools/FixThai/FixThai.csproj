@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- RO3-FixThai.exe: put it next to RO3Emu.exe and run it. Needs an ro3emu-server checkout (Ro3EmuSrc) to build. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>RO3-FixThai</AssemblyName>
+    <RootNamespace>Ro3FixThai</RootNamespace>
+    <Version>1.0.0</Version>
+    <Ro3EmuSrc Condition="'$(Ro3EmuSrc)' == ''">..\..\..\ro3emu-server</Ro3EmuSrc>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\ThaiLoc\ThaiMap.cs" Link="ThaiMap.cs" />
+    <EmbeddedResource Include="..\..\translations\*.tsv" LogicalName="translations/%(Filename)%(Extension)" />
+    <ProjectReference Include="$(Ro3EmuSrc)\src\Ro3Emu.DataExport\Ro3Emu.DataExport.csproj" />
+  </ItemGroup>
+</Project>
