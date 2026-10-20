@@ -1,7 +1,8 @@
 // RO3-FixThai.exe: Thai for an existing RO3Emu, in a small window (the console cannot draw Thai with its default font).
 //
 // Put it next to RO3Emu.exe (the game is read from RO3Emu.settings.json) or in the game folder (next to ro3.exe);
-// either folder can also be picked in the window. "RO3-FixThai.exe restore" puts the English map back without a window.
+// either folder can also be picked in the window. "RO3-FixThai.exe restore" puts the English map back.
+// "--thai-from <game folder>" builds the Thai from another client, whose Thai table may be richer (2.2 MB vs 4.3 MB seen).
 //
 // Writes the Thai map (ThaiMap) to <RO3Emu>\data\loc_en.tsv, which "RO3Emu.exe join" copies next to the game, and to
 // <game>\ro3emu\loc_en.tsv, which the game reads. The English map is kept once as data\loc_en.tsv.english.
@@ -11,7 +12,8 @@ using System.Text.Json;
 using Ro3FixThai;
 
 ApplicationConfiguration.Initialize();
-var form = new FixThaiForm(args.Length > 0 && args[0].Equals("restore", StringComparison.OrdinalIgnoreCase));
+var form = new FixThaiForm(args.Length > 0 && args[0].Equals("restore", StringComparison.OrdinalIgnoreCase),
+    Array.IndexOf(args, "--thai-from") is var at and >= 0 && at + 1 < args.Length ? args[at + 1] : null);
 Application.Run(form);
 return form.ExitCode;
 
@@ -22,6 +24,7 @@ internal sealed class FixThaiForm : Form
 
     private readonly TextBox _game = new() { ReadOnly = true };
     private readonly TextBox _home = new() { ReadOnly = true };
+    private readonly TextBox _source = new() { ReadOnly = true, PlaceholderText = "(เว้นว่าง = ใช้ตารางไทยของเกมด้านบน)" };
     private readonly Button _install = new() { Text = "ติดตั้งภาษาไทย", Height = 46 };
     private readonly Button _restore = new() { Text = "กลับเป็นภาษาอังกฤษ", Height = 32 };
     private readonly TextBox _log = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
@@ -29,12 +32,13 @@ internal sealed class FixThaiForm : Form
 
     public int ExitCode { get; private set; }
 
-    public FixThaiForm(bool restoreOnly)
+    public FixThaiForm(bool restoreOnly, string? thaiFrom)
     {
         _restoreOnly = restoreOnly;
+        if (thaiFrom != null && File.Exists(ThaiMap.ThaiChunk(thaiFrom))) _source.Text = thaiFrom;
         Text = "RO3-FixThai - ภาษาไทยสำหรับ RO3Emu";
         Font = ThaiFont;
-        ClientSize = new Size(620, 430);
+        ClientSize = new Size(620, 490);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
@@ -46,16 +50,17 @@ internal sealed class FixThaiForm : Form
 
         AddRow("โฟลเดอร์เกม (มี ro3.exe)", _game, 86, PickGame);
         AddRow("โฟลเดอร์ RO3Emu (มี RO3Emu.exe)", _home, 146, PickHome);
+        AddRow("สร้างภาษาไทยจากเกมไหน (ไม่บังคับ: ไคลเอนต์ที่ตารางไทยครบกว่า)", _source, 206, PickSource);
 
-        _install.SetBounds(20, 206, 580, 46);
+        _install.SetBounds(20, 266, 580, 46);
         _install.BackColor = Green;
         _install.ForeColor = Color.White;
         _install.FlatStyle = FlatStyle.Flat;
         _install.Font = new Font(ThaiFont.FontFamily, 12f, FontStyle.Bold);
         _install.Click += async (_, _) => await InstallAsync();
-        _restore.SetBounds(20, 258, 180, 32);
+        _restore.SetBounds(20, 318, 180, 32);
         _restore.Click += (_, _) => Restore();
-        _log.SetBounds(20, 300, 580, 112);
+        _log.SetBounds(20, 360, 580, 112);
         Controls.Add(_install);
         Controls.Add(_restore);
         Controls.Add(_log);
@@ -109,6 +114,19 @@ internal sealed class FixThaiForm : Form
         if (_game.Text.Length == 0 && KnownGame(dir) is { } game && File.Exists(Path.Combine(game, "ro3.exe"))) _game.Text = game;
     }
 
+    /// <summary>Thai tables differ between client builds: the map can come from another, richer client than the one played.</summary>
+    private void PickSource()
+    {
+        if (Pick("เลือกเกมที่จะใช้ตารางภาษาไทย (ที่มี ro3.exe)", "ro3.exe") is not { } dir) return;
+        if (!File.Exists(ThaiMap.ThaiChunk(dir)))
+        {
+            MessageBox.Show(this, "เกมนี้ไม่มีตารางภาษาไทย (Localization_th)", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        _source.Text = dir;
+        Log($"ตารางไทยจาก: {dir} ({new FileInfo(ThaiMap.ThaiChunk(dir)).Length / 1048576.0:F1} MB)");
+    }
+
     private string? Pick(string description, string mustHave)
     {
         using var dialog = new FolderBrowserDialog { Description = description, UseDescriptionForTitle = true };
@@ -121,12 +139,13 @@ internal sealed class FixThaiForm : Form
     private async Task InstallAsync()
     {
         string game = _game.Text, home = _home.Text;
+        string source = _source.Text.Length > 0 ? _source.Text : game;
         if (game.Length == 0)
         {
             MessageBox.Show(this, "เลือกโฟลเดอร์เกม (ที่มี ro3.exe) ก่อน", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        if (!File.Exists(ThaiMap.ThaiChunk(game)))
+        if (!File.Exists(ThaiMap.ThaiChunk(source)))
         {
             Fail("เกมนี้ไม่มีตารางภาษาไทย (Localization_th) ต้องใช้ไคลเอนต์ที่เลือกภาษาไทยได้");
             return;
@@ -148,13 +167,14 @@ internal sealed class FixThaiForm : Form
         var staged = Path.Combine(Path.GetTempPath(), "ro3-fixthai-loc.tsv");
         try
         {
-            var result = await Task.Run(() => ThaiMap.Build(game, staged, fallback, Extras(), line => BeginInvoke(() => Log(line))));
+            var result = await Task.Run(() => ThaiMap.Build(source, staged, fallback, Extras(), line => BeginInvoke(() => Log(line))));
             var target = Path.Combine(game, "ro3emu", "loc_en.tsv");
             // Thai tables differ between client builds (2.2 MB vs 4.3 MB seen): never swap a richer map for a poorer one unasked.
             int before = ThaiLines(target), after = ThaiLines(staged);
             if (after < before && MessageBox.Show(this,
                     $"ไฟล์ภาษาไทยที่ใช้อยู่มีคำแปลไทยมากกว่า ({before:N0} บรรทัด) ไฟล์ที่เพิ่งสร้างจากเกมนี้ ({after:N0} บรรทัด)\n\n"
-                    + "ตารางภาษาไทยของเกมแต่ละเวอร์ชันไม่เท่ากัน ต้องการทับไฟล์เดิมไหม?",
+                    + "ตารางภาษาไทยของเกมแต่ละเวอร์ชันไม่เท่ากัน ถ้ามีไคลเอนต์อื่นที่ครบกว่า ให้กด No แล้วเลือกเกมนั้นในช่อง \"สร้างภาษาไทยจากเกมไหน\"\n\n"
+                    + "ต้องการทับไฟล์เดิมไหม?",
                     Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
             {
                 File.Delete(staged);

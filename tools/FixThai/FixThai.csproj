@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>RO3-FixThai</AssemblyName>
     <RootNamespace>Ro3FixThai</RootNamespace>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <Ro3EmuSrc Condition="'$(Ro3EmuSrc)' == ''">..\..\..\ro3emu-server</Ro3EmuSrc>
   </PropertyGroup>
   <ItemGroup>
