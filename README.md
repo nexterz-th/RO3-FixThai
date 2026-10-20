@@ -6,7 +6,7 @@
 
 UI · เควส · บทพูด NPC · ชื่อและป้ายใต้ชื่อ NPC · ข้อความจาก server
 
-[![Release](https://img.shields.io/github/v/release/nexterz-th/RO3-FixThai?label=ดาวน์โหลด&style=for-the-badge&color=2ea44f)](https://github.com/nexterz-th/RO3-FixThai/releases/latest)
+[![Release](https://img.shields.io/github/v/release/nexterz-th/RO3-FixThai?label=Download&style=for-the-badge&color=2ea44f)](https://github.com/nexterz-th/RO3-FixThai/releases/latest)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Windows-x64-0078D6?style=for-the-badge&logo=windows)](https://github.com/nexterz-th/RO3-FixThai/releases/latest)
 
@@ -91,13 +91,11 @@ UI · เควส · บทพูด NPC · ชื่อและป้าย�
  └─ data\
 ```
 
-**3. ดับเบิลคลิก `RO3-FixThai.exe`** โปรแกรมจะหาเกมให้เอง แล้วสร้างภาษาไทยจากไฟล์เกมในเครื่องคุณ (10–20 วินาที)
+**3. ดับเบิลคลิก `RO3-FixThai.exe`** แล้วกด **ติดตั้งภาษาไทย** (10–20 วินาที)
 
-```
-RO3-FixThai - ภาษาไทยสำหรับ RO3Emu
-> กำลังสร้างภาษาไทยจากไฟล์เกมในเครื่อง ...
-v เสร็จ: 29,539 ข้อความ (ไทย 27,099, แปลเพิ่ม 35, ยังเป็นอังกฤษ 2,411)
-```
+<img src="docs/images/fixthai-app.png" alt="หน้าต่าง RO3-FixThai" width="520">
+
+โปรแกรมหาโฟลเดอร์เกมและโฟลเดอร์ RO3Emu ให้เอง ถ้าหาไม่เจอ กด **เลือก...** แล้วเลือกโฟลเดอร์ที่มี `ro3.exe` / `RO3Emu.exe`
 
 **4. เข้าเกม** ด้วย `RO3Emu.exe join <server>` ตามปกติ แล้วในเกมเลือก **ภาษาไทย** 🎉
 
@@ -105,7 +103,7 @@ v เสร็จ: 29,539 ข้อความ (ไทย 27,099, แปลเ�
 
 | ไฟล์ | หน้าที่ |
 |:--|:--|
-| `RO3-FixThai.exe` | สร้างภาษาไทยแล้ววางไฟล์ให้ครบ · `RO3-FixThai.exe restore` = กลับเป็นอังกฤษ |
+| `RO3-FixThai.exe` | สร้างภาษาไทยแล้ววางไฟล์ให้ครบ · ปุ่ม **กลับเป็นภาษาอังกฤษ** ในหน้าต่างเดียวกัน |
 | `RO3Emu.exe` | RO3Emu 1.0.4 + [patch](patches/) แก้ **ป้ายใต้ชื่อ NPC** และ **login ไคลเอนต์ Recovery** |
 | `README-TH.txt` | วิธีใช้แบบย่อ |
 
@@ -123,6 +121,15 @@ v เสร็จ: 29,539 ข้อความ (ไทย 27,099, แปลเ�
 </details>
 
 <details>
+<summary><b>ได้ภาษาไทยน้อยกว่าที่คิด</b></summary>
+<br>
+
+ตารางภาษาไทยของเกมแต่ละเวอร์ชันมีจำนวนคำแปลไม่เท่ากัน (เจอทั้งไฟล์ 2.2 MB ได้ไทย ~12,000 ข้อความ และไฟล์ 4.3 MB ได้ ~27,000 ข้อความ)
+ข้อความที่เกมไม่มีคำแปลไทยจะเป็นภาษาอังกฤษแทน ถ้าไฟล์ภาษาไทยที่ใช้อยู่มีคำแปลมากกว่าไฟล์ใหม่ โปรแกรมจะ **ถามก่อนทับเสมอ**
+
+</details>
+
+<details>
 <summary><b>เกมอัปเดตแล้วกลับเป็นภาษาอังกฤษ</b></summary>
 <br>
 
@@ -134,7 +141,7 @@ RO3Emu สร้างไฟล์ภาษาอังกฤษใหม่ท�
 <summary><b>อยากกลับไปใช้ภาษาอังกฤษ</b></summary>
 <br>
 
-เปิด cmd ในโฟลเดอร์ RO3Emu แล้วพิมพ์
+เปิด `RO3-FixThai.exe` แล้วกดปุ่ม **กลับเป็นภาษาอังกฤษ** หรือใน cmd:
 
 ```
 RO3-FixThai.exe restore
